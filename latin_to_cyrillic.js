@@ -63,7 +63,7 @@ function processMessageContent(el) {
     if (el.getAttribute('data-translated') === 'true') return;
     if (shouldSkip(el)) return;
 
-    translateTextNodes(el, latinToCyrillic);
+    translateTextNodes(el, vietnameseToCyrillic);
     el.setAttribute('data-translated', 'true');
 }
 
@@ -87,6 +87,113 @@ function latinToCyrillic(text) {
     };
     return text.split('').map(c => map[c] || c).join('');
 }
+
+/* =====================
+   VIETNAMESE → CYRILLIC
+===================== */
+
+// 1. Remove Vietnamese tone marks (but keep base letters like â, ê, ô, ă, ơ, ư)
+function normalizeVietnamese(str) {
+    return str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // remove tone marks
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D");
+}
+
+// 2. Latin → Cyrillic (Vietnamese phonetic)
+function vietnameseToCyrillic_undiacritic(text) {
+    text = normalizeVietnamese(text);
+
+    const map = {
+        // vowels
+        'a': 'а', 'ă': 'а', 'â': 'ы',
+        'e': 'е', 'ê': 'э',
+        'i': 'и',
+        'o': 'о', 'ô': 'о', 'ơ': 'ы',
+        'u': 'у', 'ư': 'ы',
+        'y': 'и',
+
+        // consonants
+        'b': 'б', 'c': 'к', 'd': 'д', 'đ': 'д',
+        'g': 'г', 'h': 'х',
+        'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н',
+        'p': 'п', 'q': 'к', 'r': 'р',
+        's': 'с', 't': 'т', 'v': 'в',
+        'x': 'с',
+
+        // uppercase
+        'A': 'А', 'Ă': 'А', 'Â': 'Ы',
+        'E': 'Е', 'Ê': 'Э',
+        'I': 'И',
+        'O': 'О', 'Ô': 'О', 'Ơ': 'Ы',
+        'U': 'У', 'Ư': 'Ы',
+        'Y': 'И',
+
+        'B': 'Б', 'C': 'К', 'D': 'Д', 'Đ': 'Д',
+        'G': 'Г', 'H': 'Х',
+        'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н',
+        'P': 'П', 'Q': 'К', 'R': 'Р',
+        'S': 'С', 'T': 'Т', 'V': 'В',
+        'X': 'С'
+    };
+
+    return text.split('').map(c => map[c] || c).join('');
+}
+
+function vietnameseToCyrillic(text) {
+    // không xóa dấu nguyên âm
+    const textNorm = text;
+
+    return textNorm
+        // xử lý âm ghép trước
+        .replace(/ngh/gi, m => m[0] === m[0].toUpperCase() ? "НГ" : "нг")
+        .replace(/ng/gi,  m => m[0] === m[0].toUpperCase() ? "НГ" : "нг")
+        .replace(/nh/gi,  m => m[0] === m[0].toUpperCase() ? "НЬ" : "нь")
+        .replace(/ch/gi,  m => m[0] === m[0].toUpperCase() ? "Ч" : "ч")
+        .replace(/gi/gi,  m => m[0] === m[0].toUpperCase() ? "Ж" : "ж")
+        .replace(/kh/gi,  m => m[0] === m[0].toUpperCase() ? "Х" : "х")
+        .replace(/ph/gi,  m => m[0] === m[0].toUpperCase() ? "Ф" : "ф")
+        .replace(/th/gi,  m => m[0] === m[0].toUpperCase() ? "ТХ" : "тх")
+        .replace(/tr/gi,  m => m[0] === m[0].toUpperCase() ? "Ц" : "ц")
+        .replace(/qu/gi,  m => m[0] === m[0].toUpperCase() ? "Кʷ" : "кʷ")
+
+        // rồi đến từng ký tự riêng lẻ
+        .split("")
+        .map(c => latinToCyrillicMap[c] || c)
+        .join("");
+}
+
+// Bảng đơn âm
+const latinToCyrillicMap = {
+    // nguyên âm (giữ dấu)
+    "a": "а", "ă": "а", "â": "ы",
+    "e": "е", "ê": "э",
+    "i": "и",
+    "o": "о", "ô": "о", "ơ": "ы",
+    "u": "у", "ư": "ы",
+    "y": "и",
+
+    "A": "А", "Ă": "А", "Â": "Ы",
+    "E": "Е", "Ê": "Э",
+    "I": "И",
+    "O": "О", "Ô": "О", "Ơ": "Ы",
+    "U": "У", "Ư": "Ы",
+    "Y": "И",
+
+    // phụ âm đơn
+    "b": "б", "c": "к", "d": "з", "đ": "д",
+    "g": "г", "h": "х", "k": "к", "l": "л",
+    "m": "м", "n": "н", "p": "п", "q": "к",
+    "r": "р", "s": "ш", "t": "т", "v": "в",
+    "x": "с",
+
+    "B": "Б", "C": "К", "D": "З", "Đ": "Д",
+    "G": "Г", "H": "Х", "K": "К", "L": "Л",
+    "M": "М", "N": "Н", "P": "П", "Q": "К",
+    "R": "Р", "S": "Ш", "T": "Т", "V": "В",
+    "X": "С"
+};
 
 /* =====================
    INITIAL RUN
