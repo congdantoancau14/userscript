@@ -1,48 +1,77 @@
 console.log('latinToCyrillic script loaded');
 
-// Debounce utility
+/* =====================
+   GLOBAL TOGGLE STATE
+===================== */
+let cyrillicEnabled = localStorage.getItem('cyrillicEnabled') !== 'false';
+
+/* =====================
+   DEBOUNCE
+===================== */
 function debounce(func, delay) {
     let timeoutId;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => func.apply(this, args), delay);
     };
 }
 
-// Translate only text nodes, keeping HTML tags intact
-function translateTextNodes(element, translateFn) {
-    if (element.classList && element.classList.contains('CodeBlock')) return;
-
-    for (let node of element.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            node.textContent = translateFn(node.textContent);
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-            translateTextNodes(node, translateFn);
-        }
-    }
-}
-
-// List of forbidden words/characters to skip translation
+/* =====================
+   FORBIDDEN STRINGS
+===================== */
 const forbiddenStrings = ['密码', '@', '#', '/'];
 
-// Check if element should be skipped
 function shouldSkip(element) {
     const text = element.textContent;
     return forbiddenStrings.some(s => text.includes(s));
 }
 
-// Process a message block if it meets conditions
+/* =====================
+   TRANSLATE / RESTORE
+===================== */
+function translateTextNodes(element, translateFn, reverse = false) {
+    if (element.classList && element.classList.contains('CodeBlock')) return;
+
+    for (let node of element.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (!reverse) {
+                if (!node.__latinOriginal) {
+                    node.__latinOriginal = node.textContent;
+                }
+                node.textContent = translateFn(node.textContent);
+            } else {
+                if (node.__latinOriginal) {
+                    node.textContent = node.__latinOriginal;
+                }
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            translateTextNodes(node, translateFn, reverse);
+        }
+    }
+}
+
+function restoreLatin(el) {
+    translateTextNodes(el, null, true);
+    el.removeAttribute('data-translated');
+}
+
+/* =====================
+   PROCESS MESSAGE
+===================== */
 function processMessageContent(el) {
-    if (el.getAttribute('data-translated') === 'true') return; // Already translated
+    if (!cyrillicEnabled) return;
+    if (el.getAttribute('data-translated') === 'true') return;
     if (shouldSkip(el)) return;
 
     translateTextNodes(el, latinToCyrillic);
     el.setAttribute('data-translated', 'true');
 }
 
-// Latin → Cyrillic map
+/* =====================
+   LATIN → CYRILLIC MAP
+===================== */
 function latinToCyrillic(text) {
-    const latinCyrillicMap = {
+    const map = {
         'a': 'а', 'b': 'б', 'c': 'ц', 'd': 'д', 'e': 'е',
         'f': 'ф', 'g': 'г', 'h': 'х', 'i': 'и', 'j': 'й',
         'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о',
@@ -56,19 +85,27 @@ function latinToCyrillic(text) {
         'U': 'У', 'V': 'В', 'W': 'В', 'X': 'КС', 'Y': 'Й',
         'Z': 'З'
     };
-    return text.split('').map(char => latinCyrillicMap[char] || char).join('');
+    return text.split('').map(c => map[c] || c).join('');
 }
 
-// Run on existing messages
+/* =====================
+   INITIAL RUN
+===================== */
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Processing existing messages');
-    document.querySelectorAll('.message-content, .message').forEach(processMessageContent);
+    if (cyrillicEnabled) {
+        document
+            .querySelectorAll('.message-content, .message')
+            .forEach(processMessageContent);
+    }
 });
 
-// Watch for dynamically added messages
+/* =====================
+   MUTATION OBSERVER
+===================== */
 const debouncedConvert = debounce(() => {
+    if (!cyrillicEnabled) return;
     document.querySelectorAll('div').forEach(processMessageContent);
-    console.log('latinToCyrillic conversion run');
 }, 500);
 
 const observer = new MutationObserver(mutations => {
@@ -79,7 +116,9 @@ const observer = new MutationObserver(mutations => {
                     if (node.matches('.message-content, .message')) {
                         processMessageContent(node);
                     } else {
-                        node.querySelectorAll?.('.message-content, .message').forEach(processMessageContent);
+                        node
+                            .querySelectorAll?.('.message-content, .message')
+                            .forEach(processMessageContent);
                     }
                 }
             }
@@ -90,4 +129,56 @@ const observer = new MutationObserver(mutations => {
 
 document.addEventListener('DOMContentLoaded', () => {
     observer.observe(document.body, { childList: true, subtree: true });
+});
+
+/* =====================
+   TOGGLE BUTTON
+===================== */
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.createElement('button');
+    btn.textContent = cyrillicEnabled ? '🅻 Latin' : '🅲 Cyrillic';
+
+    Object.assign(btn.style, {
+        position: 'fixed',
+        bottom: '16px',
+        right: '16px',
+        zIndex: 99999,
+        padding: '8px 12px',
+        background: '#222',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        fontSize: '13px'
+    });
+
+    btn.onclick = () => {
+        cyrillicEnabled = !cyrillicEnabled;
+        localStorage.setItem('cyrillicEnabled', cyrillicEnabled);
+
+        if (!cyrillicEnabled) {
+            btn.textContent = '🅲 Cyrillic';
+            document
+                .querySelectorAll('[data-translated="true"]')
+                .forEach(restoreLatin);
+        } else {
+            btn.textContent = '🅻 Latin';
+            document
+                .querySelectorAll('.message-content, .message')
+                .forEach(processMessageContent);
+        }
+    };
+
+    document.body.appendChild(btn);
+});
+
+/* =====================
+   KEYBOARD SHORTCUT
+   Alt + L
+===================== */
+document.addEventListener('keydown', e => {
+    if (e.altKey && e.code === 'KeyL') {
+        e.preventDefault();
+        document.querySelector('button')?.click();
+    }
 });
