@@ -1,5 +1,5 @@
 $DesktopPath = "$env:USERPROFILE\Desktop"
-$Path = "$DesktopPath\DanhSachApp ToanDien"
+$Path = "$DesktopPath\AppList"
 if (!(Test-Path $Path)) { New-Item -ItemType Directory -Path $Path | Out-Null }
 
 Add-Type -AssemblyName System.Drawing
@@ -31,12 +31,10 @@ foreach ($App in $RegApps) {
 
     $IconPath = ""
     if ($App.DisplayIcon) { 
-        # Cắt bỏ tham số ,0 hoặc ," ở cuối đường dẫn icon
         $CleanIcon = $App.DisplayIcon -replace '",.*$', '' -replace ',.*$', '' -replace '"', ''
         if (Test-Path $CleanIcon) { $IconPath = $CleanIcon }
     }
     
-    # Fallback 1: Quét file .exe trong InstallLocation
     if (!$IconPath -and $App.InstallLocation -and (Test-Path $App.InstallLocation)) { 
         $ExeFiles = Get-ChildItem -Path $App.InstallLocation -Filter *.exe -Recurse -ErrorAction SilentlyContinue
         if ($ExeFiles) { $IconPath = $ExeFiles[0].FullName }
@@ -89,7 +87,6 @@ foreach ($App in $StoreApps) {
     $SizeBytes = 0
 
     if ($AppFolder -and (Test-Path $AppFolder)) {
-        # Fallback nâng cao cho UWP App: Quét kỹ các tên Asset phổ biến
         $LogoFiles = Get-ChildItem -Path $AppFolder -Include *Square44x44Logo*.png, *StoreLogo*.png, *SmallTile*.png, *logo*.png, *icon*.png -Recurse -ErrorAction SilentlyContinue
         if ($LogoFiles) { $LogoPath = $LogoFiles[0].FullName }
         $SizeBytes = (Get-ChildItem -Path $AppFolder -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
@@ -110,7 +107,7 @@ foreach ($App in $StoreApps) {
 $UniqueApps = $AppsList | Group-Object Name | ForEach-Object { $_.Group[0] } | Sort-Object Name
 
 # 4. EXPORT TO CSV
-$CsvPath = "$DesktopPath\DanhSachApp_ToanDien.csv"
+$CsvPath = "$DesktopPath\AppList.csv"
 $UniqueApps | Select-Object @{N='Application Name';E={$_.Name}}, 
                             @{N='Publisher';E={$_.Publisher}}, 
                             @{N='Version';E={$_.Version}}, 
@@ -119,9 +116,8 @@ $UniqueApps | Select-Object @{N='Application Name';E={$_.Name}},
                             @{N='Icon Path';E={$_.Icon}} | 
     Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
 
-# 5. GENERATE HTML (VỚI DEFAULT SVG ICON)
-# Icon SVG bánh răng mặc định cực nét dạng Data URI
-$DefaultSvgIcon = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230078d4'><path d='M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'/></svg>"
+# 5. GENERATE HTML
+$DefaultSvgBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzhkNCI+PHBhdGggZD0iTTE5LjE0IDEyLjk0Yy4wNC0uMy4wNi0uNjEuMDYtLjk0IDAtLjMyLS4wMi0uNjQtLjA3LS45NGwyLjAzLTEuNThjLjE4LS4xNC4yMy0uNDEuMTItLjYxbC0xLjkyLTMuMzJjLS4xMi0uMjItLjM3LS4yOS0uNTktLjIybC0yLjM5Ljk2Yy0uNS0uMzgtMS4wMy0uNy0xLjYyLS45NGwtLjM2LTIuNTRjLS4wNC0uMjQtLjI0LS40MS0uNDgtLjQxaC0zLjg0Yy0uMjQgMC0uNDMuMTctLjQ3LjQxbC0uMzYgMi41NGMtLjU5LjI0LTEuMTMuNTctMS42Mi45NGwtMi4zOS0uOTZjLS4yMi0uMDgtLjQ3IDAtLjU5LjIybC0xLjkyIDMuMzJjLS4xMi4yMS0uMDguNDcuMTIuNjFsMi4wMyAxLjU4Yy0uMDUuMy0uMDkuNjMtLjA5Ljk0cy4wMi42NC4wNy45NGwtMi4wMyAxLjU4Yy0uMTguMTQtLjIzLjQxLS4xMi42MWwxLjkyIDMuMzJjLjEyLjIyLjM3LjI5LjU5LjIybDIuMzktLjk2Yy41LjM4IDEuMDMuNyAxLjYyLjk0bC4zNiAyLjU4Yy4wNS4yNC4yNC40MS40OC40MWgzLjg0Yy4yNCAwIC40NC0uMTcuNDctLjQxbC4zNi0yLjU4Yy41OS0uMjQgMS4xMy0uNTYgMS42Mi0uOTRsMi4zOS45NmMuMjIuMDguNDcgMC41OS0uMjJsMS45Mi0zLjMyYy4xMi0uMjIuMDctLjQ3LS4xMi0uNjFsLTIuMDEtMS41OHpNMTIgMTUuNmMtMS45OCAwLTMuNi0xLjYyLTMuNi0zLjZzMS42Mi0zLjYgMy42LTMuNiAzLjYgMS42MiAzLjYgMy42LTEuNjIgMy42LTMuNiAzLjZ6Ii8+PC9zdmc+"
 
 $k = 0
 $totalRender = $UniqueApps.Count
@@ -135,28 +131,28 @@ $HtmlRows = foreach ($App in $UniqueApps) {
     $SafeName = [regex]::Replace($Name, '[^a-zA-Z0-9]', '')
     if (!$SafeName) { $SafeName = [Guid]::NewGuid().ToString() }
     $ImgPath = "$Path\$SafeName.png"
-    $ImgSrc = "./DanhSachApp ToanDien/$SafeName.png"
+    $ImgSrc = "./AppList/$SafeName.png"
     
     $Success = $false
     if ($App.Icon -and (Test-Path $App.Icon)) {
         try {
             if ($App.Icon -match '\.png$|\.jpg$|\.jpeg$') {
                 Copy-Item -Path $App.Icon -Destination $ImgPath -Force -ErrorAction SilentlyContinue
-                $Success = $true
             } else {
                 $Bmp = [System.Drawing.Icon]::ExtractAssociatedIcon($App.Icon).ToBitmap()
                 $Bmp.Save($ImgPath, [System.Drawing.Imaging.ImageFormat]::Png)
                 $Bmp.Dispose()
+            }
+            if ((Test-Path $ImgPath) -and (Get-Item $ImgPath).Length -gt 0) {
                 $Success = $true
             }
         } catch {}
     }
     
-    # Render ra HTML: Dùng đường dẫn icon trích xuất, nếu load lỗi (onerror) sẽ tự đổi sang SVG Mặc định
     if ($Success) {
-        "<tr><td><img src='$ImgSrc' width='32' height='32' onerror=""this.src='$DefaultSvgIcon'""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
+        "<tr><td class='icon-cell'><img src=""$ImgSrc"" width=""32"" height=""32"" onerror=""this.onerror=null;this.src='$DefaultSvgBase64';""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
     } else {
-        "<tr><td><img src='$DefaultSvgIcon' width='32' height='32'></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
+        "<tr><td class='icon-cell'><img src=""$DefaultSvgBase64"" width=""32"" height=""32""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
     }
 }
 
@@ -167,7 +163,7 @@ $HtmlHeader = @"
 <html>
 <head>
 <meta charset='UTF-8'>
-<title>Installed Applications</title>
+<title>AppList</title>
 <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f4f6f9; color: #333; }
     h2 { color: #2c3e50; margin-bottom: 20px; }
@@ -175,7 +171,19 @@ $HtmlHeader = @"
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f1f1f1; }
     th { background-color: #0078d4; color: white; font-weight: 600; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
     tr:hover { background-color: #f8fbff; }
-    td img { vertical-align: middle; border-radius: 4px; }
+    
+    /* CẤU HÌNH KHUNG VÀ NỀN DÀNH RIÊNG CHO ICON */
+    .icon-cell { text-align: center; width: 48px; }
+    td img { 
+        vertical-align: middle; 
+        border-radius: 6px; 
+        object-fit: contain;
+        background-color: #94a2b0; /* Nền xám trung tính */
+        border: 1px solid #dcdfe6;   /* Viền xám nhạt bao quanh */
+        padding: 3px;               /* Đệm nhẹ cho icon vừa vặn */
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Đổ bóng nổi khối nhẹ */
+    }
+    
     .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
     .DesktopApp { background: #e1f5fe; color: #0288d1; }
     .MicrosoftStore { background: #e8f5e9; color: #388e3c; }
@@ -185,7 +193,7 @@ $HtmlHeader = @"
 <h2>Installed Applications & Disk Usage</h2>
 <table>
 <tr>
-    <th width='5%'>Icon</th>
+    <th width='5%' style='text-align: center;'>Icon</th>
     <th width='30%'>Application Name</th>
     <th width='25%'>Publisher</th>
     <th width='15%'>Version</th>
@@ -197,8 +205,8 @@ $HtmlHeader = @"
 $HtmlFooter = "</table></body></html>"
 
 $FinalHtml = $HtmlHeader + ($HtmlRows -join "") + $HtmlFooter
-[System.IO.File]::WriteAllText("$DesktopPath\DanhSachApp_ToanDien.html", $FinalHtml)
+[System.IO.File]::WriteAllText("$DesktopPath\AppList.html", $FinalHtml)
 
-Write-Host "Successfully exported 2 files to Desktop:" -ForegroundColor Green
-Write-Host "1. HTML: $DesktopPath\DanhSachApp_ToanDien.html" -ForegroundColor Cyan
-Write-Host "2. CSV:  $DesktopPath\DanhSachApp_ToanDien.csv" -ForegroundColor Cyan
+Write-Host "Successfully exported files to Desktop:" -ForegroundColor Green
+Write-Host "1. HTML: $DesktopPath\AppList.html" -ForegroundColor Cyan
+Write-Host "2. CSV:  $DesktopPath\AppList.csv" -ForegroundColor Cyan
