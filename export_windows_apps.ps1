@@ -30,12 +30,18 @@ foreach ($App in $RegApps) {
     Write-Progress -Activity "Scanning Desktop Apps" -Status "Processing ($i/$totalReg): $($App.DisplayName)" -PercentComplete $percent
 
     $IconPath = ""
-    if ($App.DisplayIcon) { $IconPath = $App.DisplayIcon -replace ',.*$', '' -replace '"', '' }
-    if (!$IconPath -and $App.InstallLocation) { 
+    if ($App.DisplayIcon) { 
+        # Cắt bỏ tham số ,0 hoặc ," ở cuối đường dẫn icon
+        $CleanIcon = $App.DisplayIcon -replace '",.*$', '' -replace ',.*$', '' -replace '"', ''
+        if (Test-Path $CleanIcon) { $IconPath = $CleanIcon }
+    }
+    
+    # Fallback 1: Quét file .exe trong InstallLocation
+    if (!$IconPath -and $App.InstallLocation -and (Test-Path $App.InstallLocation)) { 
         $ExeFiles = Get-ChildItem -Path $App.InstallLocation -Filter *.exe -Recurse -ErrorAction SilentlyContinue
         if ($ExeFiles) { $IconPath = $ExeFiles[0].FullName }
     }
-    
+
     $Publisher = $App.Publisher
     if (!$Publisher) { $Publisher = "Unknown Publisher" }
 
@@ -83,7 +89,8 @@ foreach ($App in $StoreApps) {
     $SizeBytes = 0
 
     if ($AppFolder -and (Test-Path $AppFolder)) {
-        $LogoFiles = Get-ChildItem -Path $AppFolder -Include *logo*.png, *icon*.png -Recurse -ErrorAction SilentlyContinue
+        # Fallback nâng cao cho UWP App: Quét kỹ các tên Asset phổ biến
+        $LogoFiles = Get-ChildItem -Path $AppFolder -Include *Square44x44Logo*.png, *StoreLogo*.png, *SmallTile*.png, *logo*.png, *icon*.png -Recurse -ErrorAction SilentlyContinue
         if ($LogoFiles) { $LogoPath = $LogoFiles[0].FullName }
         $SizeBytes = (Get-ChildItem -Path $AppFolder -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
     }
@@ -112,8 +119,9 @@ $UniqueApps | Select-Object @{N='Application Name';E={$_.Name}},
                             @{N='Icon Path';E={$_.Icon}} | 
     Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
 
-# 5. GENERATE HTML
-$DefaultIconBase64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAALGPC/xhBQAAADhJREFUWEft0rENAAAIA0H7b9zBCY6gUpInY6p67gwwgYABAQMCBgQMCBgQMCBgQMCBgQEB8wIe3wEtp9999wAAAABJRU5ErkJggg=="
+# 5. GENERATE HTML (VỚI DEFAULT SVG ICON)
+# Icon SVG bánh răng mặc định cực nét dạng Data URI
+$DefaultSvgIcon = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230078d4'><path d='M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'/></svg>"
 
 $k = 0
 $totalRender = $UniqueApps.Count
@@ -144,11 +152,12 @@ $HtmlRows = foreach ($App in $UniqueApps) {
         } catch {}
     }
     
-    if (!$Success) {
-        [System.IO.File]::WriteAllBytes($ImgPath, [System.Convert]::FromBase64String($DefaultIconBase64))
+    # Render ra HTML: Dùng đường dẫn icon trích xuất, nếu load lỗi (onerror) sẽ tự đổi sang SVG Mặc định
+    if ($Success) {
+        "<tr><td><img src='$ImgSrc' width='32' height='32' onerror=""this.src='$DefaultSvgIcon'""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
+    } else {
+        "<tr><td><img src='$DefaultSvgIcon' width='32' height='32'></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
     }
-    
-    "<tr><td><img src='$ImgSrc' width='32' height='32' onerror=""this.src='data:image/png;base64,$DefaultIconBase64'""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
 }
 
 Write-Progress -Activity "Scan Apps" -Completed
