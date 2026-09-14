@@ -13,7 +13,7 @@ function Format-Size {
     return "N/A"
 }
 
-# 1. SCAN REGISTRY (Desktop Apps)
+# 1. SCAN REGISTRY (Desktop & Chrome Apps)
 $RegistryPaths = @(
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -27,7 +27,7 @@ $totalReg = $RegApps.Count
 foreach ($App in $RegApps) {
     $i++
     $percent = [math]::Round(($i / $totalReg) * 100)
-    Write-Progress -Activity "Scanning Desktop Apps" -Status "Processing ($i/$totalReg): $($App.DisplayName)" -PercentComplete $percent
+    Write-Progress -Activity "Scanning Registry Apps" -Status "Processing ($i/$totalReg): $($App.DisplayName)" -PercentComplete $percent
 
     $IconPath = ""
     if ($App.DisplayIcon) { 
@@ -43,6 +43,12 @@ foreach ($App in $RegApps) {
     $Publisher = $App.Publisher
     if (!$Publisher) { $Publisher = "Unknown Publisher" }
 
+    # PHÂN LOẠI CHROME APP
+    $AppType = "Desktop App"
+    if ($Publisher -like "*Google\Chrome*" -or $App.UninstallString -like "*chrome.exe*--app-id=*") {
+        $AppType = "Chrome App"
+    }
+
     $SizeBytes = 0
     if ($App.EstimatedSize) {
         $SizeBytes = [double]$App.EstimatedSize * 1KB
@@ -56,7 +62,7 @@ foreach ($App in $RegApps) {
         Version     = $App.DisplayVersion
         SizeBytes   = $SizeBytes
         DisplaySize = (Format-Size -Bytes $SizeBytes)
-        Type        = "Desktop App"
+        Type        = $AppType
         Icon        = $IconPath
     })
 }
@@ -117,7 +123,7 @@ $UniqueApps | Select-Object @{N='Application Name';E={$_.Name}},
     Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
 
 # 5. GENERATE HTML
-$DefaultSvgBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzhkNCI+PHBhdGggZD0iTTE5LjE0IDEyLjk0Yy4wNC0uMy4wNi0uNjEuMDYtLjk0IDAtLjMyLS4wMi0uNjQtLjA3LS45NGwyLjAzLTEuNThjLjE4LS4xNC4yMy0uNDEuMTItLjYxbC0xLjkyLTMuMzJjLS4xMi0uMjItLjM3LS4yOS0uNTktLjIybC0yLjM5Ljk2Yy0uNS0uMzgtMS4wMy0uNy0xLjYyLS45NGwtLjM2LTIuNTRjLS4wNC0uMjQtLjI0LS40MS0uNDgtLjQxaC0zLjg0Yy0uMjQgMC0uNDMuMTctLjQ3LjQxbC0uMzYgMi41NGMtLjU5LjI0LTEuMTMuNTctMS42Mi45NGwtMi4zOS0uOTZjLS4yMi0uMDgtLjQ3IDAtLjU5LjIybC0xLjkyIDMuMzJjLS4xMi4yMS0uMDguNDcuMTIuNjFsMi4wMyAxLjU4Yy0uMDUuMy0uMDkuNjMtLjA5Ljk0cy4wMi42NC4wNy45NGwtMi4wMyAxLjU4Yy0uMTguMTQtLjIzLjQxLS4xMi42MWwxLjkyIDMuMzJjLjEyLjIyLjM3LjI5LjU5LjIybDIuMzktLjk2Yy41LjM4IDEuMDMuNyAxLjYyLjk0bC4zNiAyLjU4Yy4wNS4yNC4yNC40MS40OC40MWgzLjg0Yy4yNCAwIC40NC0uMTcuNDctLjQxbC4zNi0yLjU4Yy41OS0uMjQgMS4xMy0uNTYgMS42Mi0uOTRsMi4zOS45NmMuMjIuMDguNDcgMC41OS0uMjJsMS45Mi0zLjMyYy4xMi0uMjIuMDctLjQ3LS4xMi0uNjFsLTIuMDEtMS41OHpNMTIgMTUuNmMtMS45OCAwLTMuNi0xLjYyLTMuNi0zLjZzMS42Mi0zLjYgMy42LTMuNiAzLjYgMS42MiAzLjYgMy42LTEuNjIgMy42LTMuNiAzLjZ6Ii8+PC9zdmc+"
+$DefaultSvgBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzhkNCI+PHBhdGggZD0iTTE5LjE0IDEyLjk0Yy4wNC0uMy4wNi0uNjEuMDYtLjk0IDAtLjMyLS4wMi0uNjQtLjA3LS45NGwyLjAzLTEuNThjLjE4LS4xNC4yMy0uNDEuMTItLjYxbC0xLjkyLTMuMzJjLS4xMi0uMjItLjM3LS4yOS0uNTktLjIybC0yLjM5Ljk2Yy0uNS0uMzgtMS4wMy0uNy0xLjYyLS45NGwtLjM2LTIuNTRjLS4wNC0uMjQtLjI0LS40MS0uNDgtLjQxaC0zLjg0Yy0uMjQgMC0uNDMuMTctLjQ3LjQxbC0uMzYgMi41NGMtLjU5LjI0LTEuMTMuNTctMS42Mi45NGwtMi4zOS0uOTZjLS4yMi0uMDgtLjQ3IDAtLjU5LjIybC0xLjkyIDMuMzJjLS4xMi4yMS0uMDguNDcuMTIuNjFsMi4wMyAxLjU4Yy0uMDUuMy0uMDkuNjMtLjA5Ljk0cy4wMi42NC4wNy45NGwtMi4wMyAxLjU4Yy0uMTguMTQtLjIzLjQxLS4xMi42MWwxLjkyIDMuMzJjLjEyLjIyLjM3LjI5LjU5LjIybDIuMzktLjk2Yy41LjM4IDEuMDMuNyAxLjYyLjk0bC4zNiAyLjU4Yy4wNS4yNC4yNC40MS40OC40MWgzLjg0Yy4yNCAwIC40NC0uMTcuNDctLjQxbC4zNi0yLjU4Yy41OS0uMjQgMS4xMy0uNTYgMS42Mi0uOTRsMi4zOS45NmMuMjIuMDguNDcgMC41OS0uMjJsMS45Mi0zLjMyYy4xMi0uMjIuMDctLjQ3LS4xMi0uNjFsLTIuMDEtMS41OHpNMTIgMTUuNmMtMS45OCAwLTMuNi0xLjYyLTMuNi0zLjZzMS42Mi03LjYgMy42LTMuNiAzLjYgMS42MiAzLjYgMy42LTEuNjIgMy42LTMuNiAzLjZ6Ii8+PC9zdmc+"
 
 $k = 0
 $totalRender = $UniqueApps.Count
@@ -149,10 +155,13 @@ $HtmlRows = foreach ($App in $UniqueApps) {
         } catch {}
     }
     
+    # Class tên badge cho CSS (loại bỏ khoảng trắng)
+    $BadgeClass = $App.Type -replace ' ', ''
+
     if ($Success) {
-        "<tr><td class='icon-cell'><img src=""$ImgSrc"" width=""32"" height=""32"" onerror=""this.onerror=null;this.src='$DefaultSvgBase64';""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
+        "<tr><td class='icon-cell'><img src=""$ImgSrc"" width=""32"" height=""32"" onerror=""this.onerror=null;this.src='$DefaultSvgBase64';""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $BadgeClass'>$($App.Type)</span></td></tr>"
     } else {
-        "<tr><td class='icon-cell'><img src=""$DefaultSvgBase64"" width=""32"" height=""32""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
+        "<tr><td class='icon-cell'><img src=""$DefaultSvgBase64"" width=""32"" height=""32""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $BadgeClass'>$($App.Type)</span></td></tr>"
     }
 }
 
@@ -172,21 +181,22 @@ $HtmlHeader = @"
     th { background-color: #0078d4; color: white; font-weight: 600; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
     tr:hover { background-color: #f8fbff; }
     
-    /* CẤU HÌNH KHUNG VÀ NỀN DÀNH RIÊNG CHO ICON */
     .icon-cell { text-align: center; width: 48px; }
     td img { 
         vertical-align: middle; 
         border-radius: 6px; 
         object-fit: contain;
-        background-color: #94a2b0; /* Nền xám trung tính */
-        border: 1px solid #dcdfe6;   /* Viền xám nhạt bao quanh */
-        padding: 3px;               /* Đệm nhẹ cho icon vừa vặn */
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Đổ bóng nổi khối nhẹ */
+        background-color: #94a2b0; 
+        border: 1px solid #dcdfe6;   
+        padding: 3px;               
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
     }
     
+    /* STYLE CHO TỪNG LOẠI BADGE */
     .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
     .DesktopApp { background: #e1f5fe; color: #0288d1; }
     .MicrosoftStore { background: #e8f5e9; color: #388e3c; }
+    .ChromeApp { background: #fff3e0; color: #e65100; } /* Tông cam/vàng Chrome */
 </style>
 </head>
 <body>
