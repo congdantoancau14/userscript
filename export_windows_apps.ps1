@@ -13,7 +13,7 @@ function Format-Size {
     return "N/A"
 }
 
-# 1. SCAN REGISTRY (Desktop & Chrome Apps)
+# 1. SCAN REGISTRY
 $RegistryPaths = @(
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -43,7 +43,6 @@ foreach ($App in $RegApps) {
     $Publisher = $App.Publisher
     if (!$Publisher) { $Publisher = "Unknown Publisher" }
 
-    # PHÂN LOẠI CHROME APP
     $AppType = "Desktop App"
     if ($Publisher -like "*Google\Chrome*" -or $App.UninstallString -like "*chrome.exe*--app-id=*") {
         $AppType = "Chrome App"
@@ -67,7 +66,7 @@ foreach ($App in $RegApps) {
     })
 }
 
-# 2. SCAN MICROSOFT STORE APPS (UWP)
+# 2. SCAN MICROSOFT STORE APPS
 $StoreApps = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object { !$_.IsFramework -and $_.NonRemovable -ne $true }
 $j = 0
 $totalStore = $StoreApps.Count
@@ -112,18 +111,19 @@ foreach ($App in $StoreApps) {
 # 3. DEDUPLICATE & SORT
 $UniqueApps = $AppsList | Group-Object Name | ForEach-Object { $_.Group[0] } | Sort-Object Name
 
-# 4. EXPORT TO CSV
+# 4. EXPORT CSV
 $CsvPath = "$DesktopPath\AppList.csv"
 $UniqueApps | Select-Object @{N='Application Name';E={$_.Name}}, 
                             @{N='Publisher';E={$_.Publisher}}, 
                             @{N='Version';E={$_.Version}}, 
-                            @{N='Size';E={$_.DisplaySize}}, 
+                            @{N='Size (Formatted)';E={$_.DisplaySize}}, 
+                            @{N='Size (Bytes)';E={$_.SizeBytes}}, 
                             @{N='Type';E={$_.Type}}, 
                             @{N='Icon Path';E={$_.Icon}} | 
     Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
 
-# 5. GENERATE HTML
-$DefaultSvgBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzhkNCI+PHBhdGggZD0iTTE5LjE0IDEyLjk0Yy4wNC0uMy4wNi0uNjEuMDYtLjk0IDAtLjMyLS4wMi0uNjQtLjA3LS45NGwyLjAzLTEuNThjLjE4LS4xNC4yMy0uNDEuMTItLjYxbC0xLjkyLTMuMzJjLS4xMi0uMjItLjM3LS4yOS0uNTktLjIybC0yLjM5Ljk2Yy0uNS0uMzgtMS4wMy0uNy0xLjYyLS45NGwtLjM2LTIuNTRjLS4wNC0uMjQtLjI0LS40MS0uNDgtLjQxaC0zLjg0Yy0uMjQgMC0uNDMuMTctLjQ3LjQxbC0uMzYgMi41NGMtLjU5LjI0LTEuMTMuNTctMS42Mi45NGwtMi4zOS0uOTZjLS4yMi0uMDgtLjQ3IDAtLjU5LjIybC0xLjkyIDMuMzJjLS4xMi4yMS0uMDguNDcuMTIuNjFsMi4wMyAxLjU4Yy0uMDUuMy0uMDkuNjMtLjA5Ljk0cy4wMi42NC4wNy45NGwtMi4wMyAxLjU4Yy0uMTguMTQtLjIzLjQxLS4xMi42MWwxLjkyIDMuMzJjLjEyLjIyLjM3LjI5LjU5LjIybDIuMzktLjk2Yy41LjM4IDEuMDMuNyAxLjYyLjk0bC4zNiAyLjU4Yy4wNS4yNC4yNC40MS40OC40MWgzLjg0Yy4yNCAwIC40NC0uMTcuNDctLjQxbC4zNi0yLjU4Yy41OS0uMjQgMS4xMy0uNTYgMS42Mi0uOTRsMi4zOS45NmMuMjIuMDguNDcgMC41OS0uMjJsMS45Mi0zLjMyYy4xMi0uMjIuMDctLjQ3LS4xMi0uNjFsLTIuMDEtMS41OHpNMTIgMTUuNmMtMS45OCAwLTMuNi0xLjYyLTMuNi0zLjZzMS42Mi03LjYgMy42LTMuNiAzLjYgMS42MiAzLjYgMy42LTEuNjIgMy42LTMuNiAzLjZ6Ii8+PC9zdmc+"
+# 5. GENERATE HTML WITH BASE64 INLINE ICONS
+$DefaultSvgBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwNzhkNCI+PHBhdGggZD0iTTE5LjE0IDEyLjk0Yy4wNC0uMy4wNi0uNjEuMDYtLjk0IDAtLjMyLS4wMi0uNjQtLjA3LS45NGwyLjAzLTEuNThjLjE4LS4xNC4yMy0uNDEuMTItLjYxbC0xLjkyLTMuMzJjLS4xMi0uMjItLjM3LS4yOS0uNTktLjIybC0yLjM5Ljk2Yy0uNS0uMzgtMS4wMy0uNy0xLjYyLS45NGwtLjM2LTIuNTRjLS4wNC0uMjQtLjI0LS40MS0uNDgtLjQxaC0zLjg0Yy0uMjQgMC0uNDMuMTctLjQ3LjQxbC0uMzYgMi41NGMtLjU5LjI0LTEuMTMuNTctMS42Mi45NGwtMi4zOS0uOTZjLS4yMi0uMDgtLjQ3IDAtLjU5LjIybC0xLjkyIDMuMzJjLS4xMi4yMS0uMDguNDcuMTIuNjFsMi4wMyAxLjU4Yy0uMDUuMy0uMDkuNjMtLjA5Ljk0cy4wMi42NC4wNy45NGwtMi4wMyAxLjU4Yy0uMTguMTQtLjIzLjQxLS4xMi42MWwxLjkyIDMuMzJjLjEyLjIyLjM3LjI5LjU5LjIybDIuMzktLjk2Yy41LjM4IDEuMDMuNyAxLjYyLjk0bC4zNiAyLjU4Yy4wNS4yNC4yNC40MS40OC40MWgzLjg0Yy4yNCAwIC40NC0uMTcuNDctLjQxbC4zNi0yLjU4Yy41OS0uMjQgMS4xMy0uNTYgMS42Mi0uOTRsMi4zOS45NmMuMjIuMDguNDcgMC41OS0uMjJsMS45Mi0zLjMyYy4xMi0uMjIuMDctLjQ3LS4xMi0uNjFsLTIuMDEtMS41OHpNMTIgMTUuNmMtMS45OCAwLTMuNi0xLjYyLTMuNi0zLjZzMS42Mi0zLjYgMy42LTMuNCAzLjYgMS42MiAzLjYgMy42LTEuNjIgMy42LTMuNiAzLjZ6Ii8+PC9zdmc+"
 
 $k = 0
 $totalRender = $UniqueApps.Count
@@ -131,38 +131,43 @@ $totalRender = $UniqueApps.Count
 $HtmlRows = foreach ($App in $UniqueApps) {
     $k++
     $percent = [math]::Round(($k / $totalRender) * 100)
-    Write-Progress -Activity "Rendering HTML & Icons" -Status "Processing ($k/$totalRender): $($App.Name)" -PercentComplete $percent
+    Write-Progress -Activity "Rendering HTML & Base64 Icons" -Status "Processing ($k/$totalRender): $($App.Name)" -PercentComplete $percent
 
     $Name = $App.Name
-    $SafeName = [regex]::Replace($Name, '[^a-zA-Z0-9]', '')
-    if (!$SafeName) { $SafeName = [Guid]::NewGuid().ToString() }
-    $ImgPath = "$Path\$SafeName.png"
-    $ImgSrc = "./AppList/$SafeName.png"
-    
-    $Success = $false
+    $IconSrc = $DefaultSvgBase64
+
     if ($App.Icon -and (Test-Path $App.Icon)) {
         try {
             if ($App.Icon -match '\.png$|\.jpg$|\.jpeg$') {
-                Copy-Item -Path $App.Icon -Destination $ImgPath -Force -ErrorAction SilentlyContinue
+                $Bytes = [System.IO.File]::ReadAllBytes($App.Icon)
+                if ($Bytes.Length -gt 0) {
+                    $Base64 = [Convert]::ToBase64String($Bytes)
+                    $IconSrc = "data:image/png;base64,$Base64"
+                }
             } else {
-                $Bmp = [System.Drawing.Icon]::ExtractAssociatedIcon($App.Icon).ToBitmap()
-                $Bmp.Save($ImgPath, [System.Drawing.Imaging.ImageFormat]::Png)
-                $Bmp.Dispose()
-            }
-            if ((Test-Path $ImgPath) -and (Get-Item $ImgPath).Length -gt 0) {
-                $Success = $true
+                $Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($App.Icon)
+                if ($Icon) {
+                    $Bmp = $Icon.ToBitmap()
+                    $MS = New-Object System.IO.MemoryStream
+                    $Bmp.Save($MS, [System.Drawing.Imaging.ImageFormat]::Png)
+                    $Bytes = $MS.ToArray()
+                    $MS.Dispose()
+                    $Bmp.Dispose()
+                    $Icon.Dispose()
+
+                    if ($Bytes.Length -gt 0) {
+                        $Base64 = [Convert]::ToBase64String($Bytes)
+                        $IconSrc = "data:image/png;base64,$Base64"
+                    }
+                }
             }
         } catch {}
     }
     
-    # Class tên badge cho CSS (loại bỏ khoảng trắng)
     $BadgeClass = $App.Type -replace ' ', ''
+    $ImgTag = "<img src=""$IconSrc"" width=""32"" height=""32"">"
 
-    if ($Success) {
-        "<tr><td class='icon-cell'><img src=""$ImgSrc"" width=""32"" height=""32"" onerror=""this.onerror=null;this.src='$DefaultSvgBase64';""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $BadgeClass'>$($App.Type)</span></td></tr>"
-    } else {
-        "<tr><td class='icon-cell'><img src=""$DefaultSvgBase64"" width=""32"" height=""32""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $BadgeClass'>$($App.Type)</span></td></tr>"
-    }
+    "<tr><td class='icon-cell' data-sort-value='$Name'>$ImgTag</td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;' data-sort-value='$($App.SizeBytes)'><b>$($App.DisplaySize)</b></td><td><span class='badge $BadgeClass'>$($App.Type)</span></td></tr>"
 }
 
 Write-Progress -Activity "Scan Apps" -Completed
@@ -173,12 +178,18 @@ $HtmlHeader = @"
 <head>
 <meta charset='UTF-8'>
 <title>AppList</title>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/sorts/tablesort.number.min.js'></script>
 <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f4f6f9; color: #333; }
     h2 { color: #2c3e50; margin-bottom: 20px; }
     table { border-collapse: collapse; width: 100%; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 8px; overflow: hidden; }
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f1f1f1; }
-    th { background-color: #0078d4; color: white; font-weight: 600; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
+    th { background-color: #0078d4; color: white; font-weight: 600; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; cursor: pointer; user-select: none; }
+    th:hover { background-color: #005a9e; }
+    th[role=columnheader]:after { content: ' \25B2\25BC'; font-size: 10px; opacity: 0.3; }
+    th[aria-sort=ascending]:after { content: ' \25B2'; opacity: 1; }
+    th[aria-sort=descending]:after { content: ' \25BC'; opacity: 1; }
     tr:hover { background-color: #f8fbff; }
     
     .icon-cell { text-align: center; width: 48px; }
@@ -192,27 +203,37 @@ $HtmlHeader = @"
         box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
     }
     
-    /* STYLE CHO TỪNG LOẠI BADGE */
     .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
     .DesktopApp { background: #e1f5fe; color: #0288d1; }
     .MicrosoftStore { background: #e8f5e9; color: #388e3c; }
-    .ChromeApp { background: #fff3e0; color: #e65100; } /* Tông cam/vàng Chrome */
+    .ChromeApp { background: #fff3e0; color: #e65100; }
 </style>
 </head>
 <body>
 <h2>Installed Applications & Disk Usage</h2>
-<table>
+<table id='appTable'>
+<thead>
 <tr>
     <th width='5%' style='text-align: center;'>Icon</th>
     <th width='30%'>Application Name</th>
     <th width='25%'>Publisher</th>
     <th width='15%'>Version</th>
-    <th width='12%' style='text-align: right;'>Size</th>
+    <th width='12%' style='text-align: right;' data-sort-method='number'>Size</th>
     <th width='13%'>Type</th>
 </tr>
+</thead>
+<tbody>
 "@
 
-$HtmlFooter = "</table></body></html>"
+$HtmlFooter = @"
+</tbody>
+</table>
+<script>
+    new Tablesort(document.getElementById('appTable'));
+</script>
+</body>
+</html>
+"@
 
 $FinalHtml = $HtmlHeader + ($HtmlRows -join "") + $HtmlFooter
 [System.IO.File]::WriteAllText("$DesktopPath\AppList.html", $FinalHtml)
