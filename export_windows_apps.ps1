@@ -1,8 +1,3 @@
-# 0. ÉP MÃ HOÁ UTF-8 CHO CHÍNH CONSOLE WINDOWS (Code Page 65001)
-[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-$null = chcp 65001
-
 $DesktopPath = "$env:USERPROFILE\Desktop"
 $Path = "$DesktopPath\DanhSachApp ToanDien"
 if (!(Test-Path $Path)) { New-Item -ItemType Directory -Path $Path | Out-Null }
@@ -18,7 +13,7 @@ function Format-Size {
     return "N/A"
 }
 
-# 1. QUÉT REGISTRY (Desktop Apps)
+# 1. SCAN REGISTRY (Desktop Apps)
 $RegistryPaths = @(
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -32,7 +27,7 @@ $totalReg = $RegApps.Count
 foreach ($App in $RegApps) {
     $i++
     $percent = [math]::Round(($i / $totalReg) * 100)
-    Write-Progress -Activity "Đang quét ứng dụng Desktop" -Status "Đang xử lý ($i/$totalReg): $($App.DisplayName)" -PercentComplete $percent
+    Write-Progress -Activity "Scanning Desktop Apps" -Status "Processing ($i/$totalReg): $($App.DisplayName)" -PercentComplete $percent
 
     $IconPath = ""
     if ($App.DisplayIcon) { $IconPath = $App.DisplayIcon -replace ',.*$', '' -replace '"', '' }
@@ -62,7 +57,7 @@ foreach ($App in $RegApps) {
     })
 }
 
-# 2. QUÉT MICROSOFT STORE APPS (UWP)
+# 2. SCAN MICROSOFT STORE APPS (UWP)
 $StoreApps = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object { !$_.IsFramework -and $_.NonRemovable -ne $true }
 $j = 0
 $totalStore = $StoreApps.Count
@@ -70,7 +65,7 @@ $totalStore = $StoreApps.Count
 foreach ($App in $StoreApps) {
     $j++
     $percent = [math]::Round(($j / $totalStore) * 100)
-    Write-Progress -Activity "Đang quét Microsoft Store Apps" -Status "Đang xử lý ($j/$totalStore): $($App.Name)" -PercentComplete $percent
+    Write-Progress -Activity "Scanning Microsoft Store Apps" -Status "Processing ($j/$totalStore): $($App.Name)" -PercentComplete $percent
 
     $Manifest = Get-AppxPackageManifest $App -ErrorAction SilentlyContinue
     $Name = $Manifest.Package.Properties.DisplayName
@@ -104,20 +99,20 @@ foreach ($App in $StoreApps) {
     })
 }
 
-# 3. LỌC TRÙNG & SẮP XẾP
+# 3. DEDUPLICATE & SORT
 $UniqueApps = $AppsList | Group-Object Name | ForEach-Object { $_.Group[0] } | Sort-Object Name
 
-# 4. XUẤT FILE CSV (Mở bằng Excel hiển thị tiếng Việt chuẩn)
+# 4. EXPORT TO CSV
 $CsvPath = "$DesktopPath\DanhSachApp_ToanDien.csv"
-$UniqueApps | Select-Object @{N='Tên ứng dụng';E={$_.Name}}, 
-                            @{N='Nhà phát hành';E={$_.Publisher}}, 
-                            @{N='Phiên bản';E={$_.Version}}, 
-                            @{N='Dung lượng';E={$_.DisplaySize}}, 
-                            @{N='Loại';E={$_.Type}}, 
-                            @{N='Đường dẫn Icon';E={$_.Icon}} | 
+$UniqueApps | Select-Object @{N='Application Name';E={$_.Name}}, 
+                            @{N='Publisher';E={$_.Publisher}}, 
+                            @{N='Version';E={$_.Version}}, 
+                            @{N='Size';E={$_.DisplaySize}}, 
+                            @{N='Type';E={$_.Type}}, 
+                            @{N='Icon Path';E={$_.Icon}} | 
     Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
 
-# 5. TẠO VÀ XUẤT FILE HTML
+# 5. GENERATE HTML
 $DefaultIconBase64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAALGPC/xhBQAAADhJREFUWEft0rENAAAIA0H7b9zBCY6gUpInY6p67gwwgYABAQMCBgQMCBgQMCBgQMCBgQEB8wIe3wEtp9999wAAAABJRU5ErkJggg=="
 
 $k = 0
@@ -126,7 +121,7 @@ $totalRender = $UniqueApps.Count
 $HtmlRows = foreach ($App in $UniqueApps) {
     $k++
     $percent = [math]::Round(($k / $totalRender) * 100)
-    Write-Progress -Activity "Đang trích xuất Icon và tạo HTML" -Status "Đang render ($k/$totalRender): $($App.Name)" -PercentComplete $percent
+    Write-Progress -Activity "Rendering HTML & Icons" -Status "Processing ($k/$totalRender): $($App.Name)" -PercentComplete $percent
 
     $Name = $App.Name
     $SafeName = [regex]::Replace($Name, '[^a-zA-Z0-9]', '')
@@ -156,14 +151,14 @@ $HtmlRows = foreach ($App in $UniqueApps) {
     "<tr><td><img src='$ImgSrc' width='32' height='32' onerror=""this.src='data:image/png;base64,$DefaultIconBase64'""></td><td><b>$Name</b></td><td>$($App.Publisher)</td><td>$($App.Version)</td><td style='text-align: right;'><b>$($App.DisplaySize)</b></td><td><span class='badge $($App.Type -replace ' ', '')'>$($App.Type)</span></td></tr>"
 }
 
-Write-Progress -Activity "Đang quét ứng dụng" -Completed
+Write-Progress -Activity "Scan Apps" -Completed
 
 $HtmlHeader = @"
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset='UTF-8'>
-<title>Danh sách ứng dụng</title>
+<title>Installed Applications</title>
 <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f4f6f9; color: #333; }
     h2 { color: #2c3e50; margin-bottom: 20px; }
@@ -178,25 +173,23 @@ $HtmlHeader = @"
 </style>
 </head>
 <body>
-<h2>Danh sách ứng dụng và Dung lượng</h2>
+<h2>Installed Applications & Disk Usage</h2>
 <table>
 <tr>
     <th width='5%'>Icon</th>
-    <th width='30%'>Tên ứng dụng</th>
-    <th width='25%'>Nhà phát hành</th>
-    <th width='15%'>Phiên bản</th>
-    <th width='12%' style='text-align: right;'>Dung lượng</th>
-    <th width='13%'>Loại</th>
+    <th width='30%'>Application Name</th>
+    <th width='25%'>Publisher</th>
+    <th width='15%'>Version</th>
+    <th width='12%' style='text-align: right;'>Size</th>
+    <th width='13%'>Type</th>
 </tr>
 "@
 
 $HtmlFooter = "</table></body></html>"
 
-# Xuất HTML bằng UTF8 có BOM để trình duyệt tự mở đúng UTF-8
 $FinalHtml = $HtmlHeader + ($HtmlRows -join "") + $HtmlFooter
-$Utf8WithBom = New-Object System.Text.UTF8Encoding $true
-[System.IO.File]::WriteAllText("$DesktopPath\DanhSachApp_ToanDien.html", $FinalHtml, $Utf8WithBom)
+[System.IO.File]::WriteAllText("$DesktopPath\DanhSachApp_ToanDien.html", $FinalHtml)
 
-Write-Host "Đã xuất thành công 2 file ra Desktop:" -ForegroundColor Green
+Write-Host "Successfully exported 2 files to Desktop:" -ForegroundColor Green
 Write-Host "1. HTML: $DesktopPath\DanhSachApp_ToanDien.html" -ForegroundColor Cyan
 Write-Host "2. CSV:  $DesktopPath\DanhSachApp_ToanDien.csv" -ForegroundColor Cyan
