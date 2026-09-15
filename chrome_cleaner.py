@@ -31,7 +31,6 @@ def clean_json_comments(json_str):
             return match.group(1)
         return ""
     cleaned = re.sub(pattern, replace, json_str)
-    # Xóa dấu phẩy thừa trước ngoặc đóng } hoặc ]
     cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
     return cleaned
 
@@ -41,7 +40,6 @@ def get_extension_name(version_path):
         return "Unknown Extension"
     
     try:
-        # Sử dụng utf-8-sig để tự động bỏ qua UTF-8 BOM nếu có
         with open(manifest_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
             content = clean_json_comments(f.read())
             data = json.loads(content)
@@ -76,14 +74,17 @@ def get_extension_name(version_path):
 def export_to_csv(results, output_path="chrome_extensions.csv"):
     with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["Profile", "Extension Name", "Extension ID", "Size Bytes", "Size MB"])
+        writer.writerow(["Profile", "Extension Name", "Extension ID", "Size Bytes", "Size MB", "Path"])
         for res in results:
-            writer.writerow([res['profile'], res['name'], res['id'], res['size_bytes'], round(res['size_mb'], 2)])
+            writer.writerow([res['profile'], res['name'], res['id'], res['size_bytes'], round(res['size_mb'], 2), res['path']])
     print(f"[+] Đã xuất file CSV: {output_path}")
 
 def export_to_html(results, output_path="chrome_extensions.html"):
     rows_html = ""
     for res in results:
+        # Tạo URL dạng file:///C:/Users/... để Chrome mở trực tiếp thư mục
+        file_url = Path(res['path']).as_uri()
+        
         rows_html += f"""
         <tr>
             <td>{res['profile']}</td>
@@ -91,6 +92,7 @@ def export_to_html(results, output_path="chrome_extensions.html"):
             <td><code>{res['id']}</code></td>
             <td class="num" data-value="{res['size_bytes']}">{res['size_bytes']:,}</td>
             <td class="num" data-value="{res['size_mb']:.2f}">{res['size_mb']:.2f} MB</td>
+            <td><a href="{file_url}" target="_blank" title="{res['path']}">Open Folder</a></td>
         </tr>"""
 
     html_content = f"""<!DOCTYPE html>
@@ -103,16 +105,18 @@ def export_to_html(results, output_path="chrome_extensions.html"):
         h2 {{ color: #1a73e8; }}
         table {{ border-collapse: collapse; width: 100%; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }}
         th, td {{ padding: 12px 16px; text-align: left; border-bottom: 1px solid #e0e0e0; }}
-        th {{ background-color: #1a73e8; color: white; cursor: pointer; user-select: none; position: relative; }}
+        th {{ background-color: #1a73e8; color: white; cursor: pointer; user-select: none; }}
         th:hover {{ background-color: #1557b0; }}
         tr:hover {{ background-color: #f1f3f4; }}
         .num {{ text-align: right; font-family: monospace; font-size: 14px; }}
         code {{ font-family: monospace; background: #f1f3f4; padding: 2px 6px; border-radius: 4px; }}
+        a {{ color: #1a73e8; text-decoration: none; font-weight: 500; }}
+        a:hover {{ text-decoration: underline; }}
     </style>
 </head>
 <body>
     <h2>Báo cáo dung lượng Chrome Extensions</h2>
-    <p>Click vào tiêu đề cột để sắp xếp (tăng/giảm dần).</p>
+    <p>Click vào tiêu đề cột để sắp xếp (tăng/giảm dần). Click <b>Open Folder</b> để mở thư mục trên Chrome.</p>
     <table id="extTable">
         <thead>
             <tr>
@@ -121,6 +125,7 @@ def export_to_html(results, output_path="chrome_extensions.html"):
                 <th onclick="sortTable(2, 'string')">Extension ID ⇳</th>
                 <th onclick="sortTable(3, 'number')" style="text-align: right;">Size (Bytes) ⇳</th>
                 <th onclick="sortTable(4, 'number')" style="text-align: right;">Size (MB) ⇳</th>
+                <th onclick="sortTable(5, 'string')">Location ⇳</th>
             </tr>
         </thead>
         <tbody>{rows_html}
@@ -192,7 +197,8 @@ def analyze_extensions():
                             "id": ext_id_dir.name,
                             "name": ext_name,
                             "size_bytes": size_bytes,
-                            "size_mb": size_mb
+                            "size_mb": size_mb,
+                            "path": str(ext_id_dir.resolve())
                         })
 
     results.sort(key=lambda x: x['size_mb'], reverse=True)
