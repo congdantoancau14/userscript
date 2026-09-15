@@ -4,12 +4,27 @@ import re
 import csv
 from pathlib import Path
 
-def get_chrome_extension_path():
+def get_chrome_user_data_path():
     local_appdata = os.environ.get('LOCALAPPDATA')
     if not local_appdata:
         print("Không tìm thấy đường dẫn AppData.")
         return None
     return Path(local_appdata) / "Google" / "Chrome" / "User Data"
+
+def get_profile_names_map(user_data_path):
+    """Đọc file Local State để lấy bản đồ {Profile_Dir_Name: Profile_Display_Name}"""
+    local_state_path = user_data_path / "Local State"
+    profile_map = {}
+    if local_state_path.exists():
+        try:
+            with open(local_state_path, 'r', encoding='utf-8', errors='ignore') as f:
+                data = json.load(f)
+                info_cache = data.get("profile", {}).get("info_cache", {})
+                for prof_dir, prof_info in info_cache.items():
+                    profile_map[prof_dir] = prof_info.get("name", prof_dir)
+        except Exception as e:
+            print(f"Không thể đọc Local State: {e}")
+    return profile_map
 
 def get_extension_size(extension_path):
     total_size = 0
@@ -24,7 +39,6 @@ def get_extension_size(extension_path):
     return total_size
 
 def clean_json_comments(json_str):
-    # Xóa comment // và /* */ mà không làm hỏng chuỗi https://
     pattern = r'("(\\.|[^\\"])*")|//.*|/\*[\s\S]*?\*/'
     def replace(match):
         if match.group(1):
@@ -74,20 +88,37 @@ def get_extension_name(version_path):
 def export_to_csv(results, output_path="chrome_extensions.csv"):
     with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["Profile", "Extension Name", "Extension ID", "Size Bytes", "Size MB", "Path"])
+        writer.writerow(["Profile Directory", "Profile Name", "Extension Name", "Extension ID", "Size Bytes", "Size MB", "Path", "Launch Command"])
         for res in results:
-            writer.writerow([res['profile'], res['name'], res['id'], res['size_bytes'], round(res['size_mb'], 2), res['path']])
+            cmd = f'chrome.exe --profile-directory="{res["profile_dir"]}"'
+            writer.writerow([
+                res['profile_dir'], 
+                res['profile_name'], 
+                res['name'], 
+                res['id'], 
+                res['size_bytes'], 
+                round(res['size_mb'], 2), 
+                res['path'],
+                cmd
+            ])
     print(f"[+] Đã xuất file CSV: {output_path}")
 
 def export_to_html(results, output_path="chrome_extensions.html"):
     rows_html = ""
     for res in results:
-        # Tạo URL dạng file:///C:/Users/... để Chrome mở trực tiếp thư mục
         file_url = Path(res['path']).as_uri()
+        chrome_cmd = f'chrome.exe --profile-directory="{res["profile_dir"]}"'
         
         rows_html += f"""
         <tr>
-            <td>{res['profile']}</td>
+            <td><code>{res['profile_dir']}</code></td>
+            <td class="profile-cell" 
+                data-cmd='{chrome_cmd}' 
+                onclick="copyToClipboard(this)" 
+                title="Click to copy command: {chrome_cmd}">
+                <b>{res['profile_name']}</b>
+                <span class="copy-badge">Copied!</span>
+            </td>
             <td>{res['name']}</td>
             <td><code>{res['id']}</code></td>
             <td class="num" data-value="{res['size_bytes']}">{res['size_bytes']:,}</td>
@@ -112,20 +143,35 @@ def export_to_html(results, output_path="chrome_extensions.html"):
         code {{ font-family: monospace; background: #f1f3f4; padding: 2px 6px; border-radius: 4px; }}
         a {{ color: #1a73e8; text-decoration: none; font-weight: 500; }}
         a:hover {{ text-decoration: underline; }}
+        
+        /* Style cho cột Profile Click-to-Copy */
+        .profile-cell {{ cursor: pointer; position: relative; color: #1a73e8; transition: color 0.2s; }}
+        .profile-cell:hover {{ color: #1557b0; text-decoration: underline; }}
+        .copy-badge {{
+            display: none;
+            margin-left: 8px;
+            padding: 2px 6px;
+            font-size: 11px;
+            background-color: #34a853;
+            color: white;
+            border-radius: 4px;
+            font-weight: normal;
+        }}
     </style>
 </head>
 <body>
     <h2>Báo cáo dung lượng Chrome Extensions</h2>
-    <p>Click vào tiêu đề cột để sắp xếp (tăng/giảm dần). Click <b>Open Folder</b> để mở thư mục trên Chrome.</p>
+    <p>Click vào tiêu đề cột để sắp xếp. Click vào <b>Profile Name</b> để sao chép lệnh mở Profile vào Clipboard (Run / CMD).</p>
     <table id="extTable">
         <thead>
             <tr>
-                <th onclick="sortTable(0, 'string')">Profile ⇳</th>
-                <th onclick="sortTable(1, 'string')">Extension Name ⇳</th>
-                <th onclick="sortTable(2, 'string')">Extension ID ⇳</th>
-                <th onclick="sortTable(3, 'number')" style="text-align: right;">Size (Bytes) ⇳</th>
-                <th onclick="sortTable(4, 'number')" style="text-align: right;">Size (MB) ⇳</th>
-                <th onclick="sortTable(5, 'string')">Location ⇳</th>
+                <th onclick="sortTable(0, 'string')">Profile Dir ⇳</th>
+                <th onclick="sortTable(1, 'string')">Profile Name ⇳</th>
+                <th onclick="sortTable(2, 'string')">Extension Name ⇳</th>
+                <th onclick="sortTable(3, 'string')">Extension ID ⇳</th>
+                <th onclick="sortTable(4, 'number')" style="text-align: right;">Size (Bytes) ⇳</th>
+                <th onclick="sortTable(5, 'number')" style="text-align: right;">Size (MB) ⇳</th>
+                <th onclick="sortTable(6, 'string')">Location ⇳</th>
             </tr>
         </thead>
         <tbody>{rows_html}
@@ -133,6 +179,23 @@ def export_to_html(results, output_path="chrome_extensions.html"):
     </table>
 
     <script>
+        // Hàm copy lệnh vào Clipboard
+        function copyToClipboard(element) {{
+            const cmd = element.getAttribute("data-cmd");
+            if (!cmd) return;
+            
+            navigator.clipboard.writeText(cmd).then(() => {{
+                const badge = element.querySelector(".copy-badge");
+                if (badge) {{
+                    badge.style.display = "inline";
+                    setTimeout(() => {{ badge.style.display = "none"; }}, 1500);
+                }}
+            }}).catch(err => {{
+                console.error("Lỗi copy: ", err);
+            }});
+        }}
+
+        // Hàm Sắp xếp bảng
         const sortDirections = {{}};
         function sortTable(colIndex, type) {{
             const table = document.getElementById("extTable");
@@ -170,10 +233,12 @@ def export_to_html(results, output_path="chrome_extensions.html"):
     print(f"[+] Đã xuất file HTML: {output_path}")
 
 def analyze_extensions():
-    chrome_path = get_chrome_extension_path()
+    chrome_path = get_chrome_user_data_path()
     if not chrome_path or not chrome_path.exists():
         print("Không tìm thấy thư mục cài đặt của Google Chrome.")
         return
+
+    profile_names_map = get_profile_names_map(chrome_path)
 
     print(f"--- Đang quét thư mục: {chrome_path} ---\n")
     results = []
@@ -182,6 +247,8 @@ def analyze_extensions():
         if profile_dir.is_dir() and (profile_dir.name == "Default" or profile_dir.name.startswith("Profile ")):
             ext_dir = profile_dir / "Extensions"
             if ext_dir.exists():
+                profile_display_name = profile_names_map.get(profile_dir.name, profile_dir.name)
+                
                 for ext_id_dir in ext_dir.iterdir():
                     if ext_id_dir.is_dir() and len(ext_id_dir.name) == 32:
                         size_bytes = get_extension_size(ext_id_dir)
@@ -193,7 +260,8 @@ def analyze_extensions():
                             ext_name = get_extension_name(versions[0])
                         
                         results.append({
-                            "profile": profile_dir.name,
+                            "profile_dir": profile_dir.name,
+                            "profile_name": profile_display_name,
                             "id": ext_id_dir.name,
                             "name": ext_name,
                             "size_bytes": size_bytes,
@@ -203,11 +271,12 @@ def analyze_extensions():
 
     results.sort(key=lambda x: x['size_mb'], reverse=True)
 
-    print(f"{'PROFILE':<12} | {'dung lượng (MB)':<15} | {'EXTENSION NAME':<35} | {'EXTENSION ID'}")
-    print("-" * 100)
+    print(f"{'PROFILE DIR':<12} | {'PROFILE NAME':<20} | {'dung lượng (MB)':<15} | {'EXTENSION NAME':<30} | {'EXTENSION ID'}")
+    print("-" * 115)
     for res in results:
-        display_name = res['name'][:32] + '...' if len(res['name']) > 32 else res['name']
-        print(f"{res['profile']:<12} | {res['size_mb']:<13.2f} MB | {display_name:<35} | {res['id']}")
+        display_ext_name = res['name'][:27] + '...' if len(res['name']) > 30 else res['name']
+        display_prof_name = res['profile_name'][:18] + '..' if len(res['profile_name']) > 20 else res['profile_name']
+        print(f"{res['profile_dir']:<12} | {display_prof_name:<20} | {res['size_mb']:<13.2f} MB | {display_ext_name:<30} | {res['id']}")
 
     print("\n" + "=" * 50)
     export_to_csv(results)
@@ -215,4 +284,4 @@ def analyze_extensions():
 
 if __name__ == "__main__":
     analyze_extensions()
-    input("\nNhấn Enter để thoát...")
+    # input("\nNhấn Enter để thoát...")
