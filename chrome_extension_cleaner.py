@@ -12,7 +12,6 @@ def get_chrome_user_data_path():
     return Path(local_appdata) / "Google" / "Chrome" / "User Data"
 
 def get_profile_names_map(user_data_path):
-    """Đọc file Local State để lấy bản đồ {Profile_Dir_Name: Profile_Display_Name}"""
     local_state_path = user_data_path / "Local State"
     profile_map = {}
     if local_state_path.exists():
@@ -88,9 +87,16 @@ def get_extension_name(version_path):
 def export_to_csv(results, output_path="chrome_extensions.csv"):
     with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["Profile Directory", "Profile Name", "Extension Name", "Extension ID", "Size Bytes", "Size MB", "Path", "Launch Command"])
+        writer.writerow([
+            "Profile Directory", "Profile Name", "Extension Name", 
+            "Extension ID", "Size Bytes", "Size MB", "Path", 
+            "Launch Command", "Settings URL", "Webstore URL"
+        ])
         for res in results:
             cmd = f'chrome.exe --profile-directory="{res["profile_dir"]}"'
+            settings_url = f"chrome://extensions/?id={res['id']}"
+            webstore_url = f"https://chromewebstore.google.com/detail/{res['id']}"
+            
             writer.writerow([
                 res['profile_dir'], 
                 res['profile_name'], 
@@ -99,7 +105,9 @@ def export_to_csv(results, output_path="chrome_extensions.csv"):
                 res['size_bytes'], 
                 round(res['size_mb'], 2), 
                 res['path'],
-                cmd
+                cmd,
+                settings_url,
+                webstore_url
             ])
     print(f"[+] Đã xuất file CSV: {output_path}")
 
@@ -108,6 +116,8 @@ def export_to_html(results, output_path="chrome_extensions.html"):
     for res in results:
         file_url = Path(res['path']).as_uri()
         chrome_cmd = f'chrome.exe --profile-directory="{res["profile_dir"]}"'
+        settings_url = f"chrome://extensions/?id={res['id']}"
+        webstore_url = f"https://chromewebstore.google.com/detail/{res['id']}"
         
         rows_html += f"""
         <tr>
@@ -119,8 +129,8 @@ def export_to_html(results, output_path="chrome_extensions.html"):
                 <b>{res['profile_name']}</b>
                 <span class="copy-badge">Copied!</span>
             </td>
-            <td>{res['name']}</td>
-            <td><code>{res['id']}</code></td>
+            <td><a href="{webstore_url}" target="_blank" title="Go to Chrome Web Store" class="webstore-link">{res['name']}</a></td>
+            <td><a href="{settings_url}" target="_blank" title="Open Extension Settings" class="settings-link"><code>{res['id']}</code></a></td>
             <td class="num" data-value="{res['size_bytes']}">{res['size_bytes']:,}</td>
             <td class="num" data-value="{res['size_mb']:.2f}">{res['size_mb']:.2f} MB</td>
             <td><a href="{file_url}" target="_blank" title="{res['path']}">Open Folder</a></td>
@@ -144,6 +154,12 @@ def export_to_html(results, output_path="chrome_extensions.html"):
         a {{ color: #1a73e8; text-decoration: none; font-weight: 500; }}
         a:hover {{ text-decoration: underline; }}
         
+        /* Webstore & Settings Links */
+        .webstore-link {{ color: #202124; }}
+        .webstore-link:hover {{ color: #1a73e8; text-decoration: underline; }}
+        .settings-link code {{ color: #1a73e8; }}
+        .settings-link:hover code {{ text-decoration: underline; background: #e8f0fe; }}
+        
         /* Style cho cột Profile Click-to-Copy */
         .profile-cell {{ cursor: pointer; position: relative; color: #1a73e8; transition: color 0.2s; }}
         .profile-cell:hover {{ color: #1557b0; text-decoration: underline; }}
@@ -161,7 +177,11 @@ def export_to_html(results, output_path="chrome_extensions.html"):
 </head>
 <body>
     <h2>Báo cáo dung lượng Chrome Extensions</h2>
-    <p>Click vào tiêu đề cột để sắp xếp. Click vào <b>Profile Name</b> để sao chép lệnh mở Profile vào Clipboard (Run / CMD).</p>
+    <p>
+        • Click <b>Extension Name</b> để tới Chrome Web Store.<br>
+        • Click <b>Extension ID</b> để mở trang Cài đặt Extension.<br>
+        • Click <b>Profile Name</b> để copy lệnh khởi chạy Profile.
+    </p>
     <table id="extTable">
         <thead>
             <tr>
@@ -179,7 +199,6 @@ def export_to_html(results, output_path="chrome_extensions.html"):
     </table>
 
     <script>
-        // Hàm copy lệnh vào Clipboard
         function copyToClipboard(element) {{
             const cmd = element.getAttribute("data-cmd");
             if (!cmd) return;
@@ -195,7 +214,6 @@ def export_to_html(results, output_path="chrome_extensions.html"):
             }});
         }}
 
-        // Hàm Sắp xếp bảng
         const sortDirections = {{}};
         function sortTable(colIndex, type) {{
             const table = document.getElementById("extTable");
@@ -284,4 +302,4 @@ def analyze_extensions():
 
 if __name__ == "__main__":
     analyze_extensions()
-    # input("\nNhấn Enter để thoát...")
+    input("\nNhấn Enter để thoát...")
